@@ -1,6 +1,6 @@
 # ESP32-C3-OLED_3DS18x20_Web
 
-THERMO-Logger V1.4 – ESP32‑C3 OLED Temperatur- und Relaisregler
+THERMO-Logger V1.5 – ESP32‑C3 OLED Temperatur- und Relaisregler
 
 # Projektüberblick
 
@@ -43,7 +43,8 @@ Trigger-Ausgänge:
 ​
 # Single-Page-Dashboard mit folgenden Bereichen:
 
-<img width="328" height="576" alt="image" src="https://github.com/user-attachments/assets/af5a7e2e-170e-4271-b337-9c0a43e13786" />
+<img width="470" height="659" alt="Dashboard" src="https://github.com/user-attachments/assets/20e8f1f6-6876-4f64-9dfb-9a79182a92bb" />
+
 
 * Live-Status der Sensoren (Temperatur, Status low/normal/high, ROM-ID mit DS18B20-Familie und vollständiger 64‑Bit‑Adresse).
 ​* Konfiguration (Auflösung, AP-SSID/Passwort, Display-Timeout, Messintervall).
