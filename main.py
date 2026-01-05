@@ -1,25 +1,26 @@
-# main.py - AP + Webserver + Logger, OLED-Screensaver mit Boot-Button - VERSION 1.4
+# main.py - AP + Webserver + Logger, OLED-Screensaver mit Boot-Button - VERSION 1.5
 
 ''' PERPLEXITY
 
 ESP32-C3_OLED
-GPIO 0 = Sensor A Input
-GPIO 1 = Sensor B Input
-GPIO 2 = Sensor C Input
+
+ONBOARD LED : GPIO 8 (Low-active: 0=ON, 1=OFF)
+BOOT Button : GPIO 9 (Pull-up, aktiv LOW)
+I2C : SDA=5, SCL=6
+
+GPIO Trigger Outputs:
 GPIO 3 = Sensor A Output
 GPIO 4 = Sensor B Output
-GPIO 5 = I2C SDA=5
-GPIO 6 = I2C SCL=6
 GPIO 7 = Sensor C Output
-GPIO 8 = ONBOARD LED (Low-active: 0=ON, 1=OFF), 
-GPIO 9 = BOOT Button (Pull-up, aktiv LOW)
 
 OLED -THERMO- Format
 
-# -THERMO-    #
-# A: 17.888   # Example "normal"
-# B:_17.888   # Example "low"
-# C:17.888_   # Example "high"
+# -THERMO- #
+# A: 17.888 # Example "normal"
+# B:_17.888 # Example "low"
+# C: 17.888_# Example "high"
+
+VERSION 1.5: Temperatur-Offset pro Sensor
 
 '''
 
@@ -49,9 +50,9 @@ DEFAULT_CFG = {
     "display_timeout_s": 60,
     "measure_interval_s": 2,
     "sensors": {
-        "A": {"enabled": True, "low_trigger": 18.0, "high_trigger": 25.0, "invert_logic": False},
-        "B": {"enabled": True, "low_trigger": 18.0, "high_trigger": 25.0, "invert_logic": False},
-        "C": {"enabled": True, "low_trigger": 18.0, "high_trigger": 25.0, "invert_logic": False},
+        "A": {"enabled": True, "low_trigger": 18.0, "high_trigger": 25.0, "invert_logic": False, "offset": 0.0},
+        "B": {"enabled": True, "low_trigger": 18.0, "high_trigger": 25.0, "invert_logic": False, "offset": 0.0},
+        "C": {"enabled": True, "low_trigger": 18.0, "high_trigger": 25.0, "invert_logic": False, "offset": 0.0},
     },
 }
 
@@ -219,13 +220,13 @@ if oled:
     time.sleep(3)
 
 # -------------------------------------------------------
-# Temperatur lesen (Helper)
+# Temperatur lesen (Helper) - MIT OFFSET
 # -------------------------------------------------------
 
 def read_temps():
-    """Liest aktuelle Temperaturen von allen Sensoren"""
+    """Liest aktuelle Temperaturen von allen Sensoren und wendet Offset an"""
     temps = []
-    for sensor in sensors:
+    for i, sensor in enumerate(sensors):
         val = None
         try:
             res = sensor.read()
@@ -233,6 +234,12 @@ def read_temps():
                 val = res[0]
             elif isinstance(res, (float, int)):
                 val = res
+            
+            # Offset anwenden
+            if val is not None:
+                label = SENSOR_LABELS[i]
+                offset = cfg["sensors"].get(label, {}).get("offset", 0.0)
+                val = val + offset
         except:
             pass
         temps.append(val)
@@ -341,7 +348,7 @@ while True:
         measure_interval_ms = cfg.get("measure_interval_s", 2) * 1000
         
         if time.ticks_diff(current_ms, last_read_ms) >= measure_interval_ms:
-            temps = read_temps()
+            temps = read_temps()  # Liest Temperatur MIT Offset
             last_read_ms = current_ms
             
             # 3. Trigger-GPIOs aktualisieren

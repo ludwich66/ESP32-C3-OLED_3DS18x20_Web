@@ -1,4 +1,4 @@
-# webserver.py - AP + Dashboard + CSV-Download (VERSION 1.4 - Trigger + ROM-ID)
+# webserver.py - AP + Dashboard + CSV-Download (VERSION 1.5 - Trigger + ROM-ID + Offset)
 
 import network
 import socket
@@ -13,14 +13,13 @@ get_temps_global = None
 save_cb_global = None
 rom_info_global = []  # Sensor ROM Informationen (Familie + Serial)
 
-# HINWEIS: Chart.js und die Chart-Sektion wurden entfernt, um RAM zu sparen.
 html_template = """
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>THERMO-Logger V1.4</title>
+    <title>THERMO-Logger V1.5</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; background: #1a1a1a; color: #fff; padding: 20px; }
@@ -43,7 +42,7 @@ html_template = """
         .form-group { margin: 10px 0; }
         label { display: block; margin-bottom: 4px; color: #ccc; }
         input, select { width: 100%; padding: 8px; background: #333; color: #fff; border: 1px solid #444; border-radius: 3px; font-size: 14px; }
-        .sensor-row { display: grid; grid-template-columns: 30px 90px 1fr 1fr 100px; gap: 5px; align-items: center; margin-bottom: 8px; }
+        .sensor-row { display: grid; grid-template-columns: 30px 70px 80px 80px 80px 90px; gap: 5px; align-items: center; margin-bottom: 8px; font-size: 13px; }
 
         button { background: #4CAF50; color: white; padding: 8px 16px; border: none; border-radius: 3px; cursor: pointer; font-size: 14px; margin-right: 5px; }
         button:hover { background: #45a049; }
@@ -56,7 +55,7 @@ html_template = """
 </head>
 <body>
     <div class="container">
-        <h1>🌡️ THERMO-Logger V1.4</h1>
+        <h1>🌡️ THERMO-Logger V1.5</h1>
 
         <div class="status-box">
             <h2>📊 Live Status</h2>
@@ -96,7 +95,7 @@ html_template = """
                 <input type="number" id="measure_interval_s" min="1" max="86400" value="2">
             </div>
 
-            <h3>Sensor A/B/C Trigger</h3>
+            <h3>Sensor A/B/C Trigger & Kalibrierung</h3>
             <div id="sensor-config"></div>
 
             <button onclick="saveConfig()">💾 Speichern & Reboot</button>
@@ -141,15 +140,17 @@ html_template = """
                 const low  = sc.low_trigger  != null ? sc.low_trigger  : 18.0;
                 const high = sc.high_trigger != null ? sc.high_trigger : 25.0;
                 const invert = sc.invert_logic === true;
+                const offset = sc.offset != null ? sc.offset : 0.0;
 
                 const row = document.createElement('div');
                 row.className = 'sensor-row';
                 row.innerHTML = `
                     <span>${label}</span>
                     <label><input type="checkbox" id="en_${label}" ${enabled ? 'checked' : ''}> Aktiv</label>
-                    <input type="number" id="low_${label}" step="0.1" value="${low}">
-                    <input type="number" id="high_${label}" step="0.1" value="${high}">
-                    <label><input type="checkbox" id="inv_${label}" ${invert ? 'checked' : ''}> Invert logic</label>
+                    <input type="number" id="low_${label}" step="0.1" value="${low}" placeholder="Low">
+                    <input type="number" id="high_${label}" step="0.1" value="${high}" placeholder="High">
+                    <input type="number" id="offset_${label}" step="0.1" value="${offset}" placeholder="Offset">
+                    <label><input type="checkbox" id="inv_${label}" ${invert ? 'checked' : ''}> Invert</label>
                 `;
                 container.appendChild(row);
             });
@@ -189,6 +190,7 @@ html_template = """
                     enabled: document.getElementById('en_' + label).checked,
                     low_trigger: parseFloat(document.getElementById('low_' + label).value),
                     high_trigger: parseFloat(document.getElementById('high_' + label).value),
+                    offset: parseFloat(document.getElementById('offset_' + label).value) || 0.0,
                     invert_logic: document.getElementById('inv_' + label).checked
                 };
             });
@@ -198,7 +200,7 @@ html_template = """
                     method: 'POST',
                     body: JSON.stringify(cfg)
                 });
-                alert('Konfiguration gespeichert – THERMO startet neu - WLAN verbinden');
+                alert('Konfiguration gespeichert – THERMO startet neu... - WLAN verbinden');
                 setTimeout(() => location.reload(), 2000);
             } catch (e) {
                 alert('Fehler beim Speichern: ' + e);
@@ -235,8 +237,6 @@ html_template = """
                     }
 
                     // Vollständige ROM-Adresse mit Trennzeichen: Family-Serial-CRC
-                    // ROM 64-Bit: Byte0(Family)-Byte1-6(Serial)-Byte7(CRC)
-                    // z.B. 282FD4833121030E -> 28-2FD483312103-0E
                     let displayRom = serial;
                     if (serial.length === 16) {
                         displayRom = serial.slice(0,2) + '-' + serial.slice(2,14) + '-' + serial.slice(14,16);
@@ -328,7 +328,7 @@ html_template = """
 """
 
 def build_temps_payload():
-    """Erstellt Temps + Status + ROM-Info für Dashboard - VERSION 1.4"""
+    """Erstellt Temps + Status + ROM-Info für Dashboard - VERSION 1.5"""
     temps = get_temps_global()
     labels = ["A", "B", "C"]
     status = []
@@ -355,7 +355,7 @@ def build_temps_payload():
         
         status.append(st)
         
-        # ROM-Info hinzufügen (vollständige 64-Bit Adresse)
+        # ROM-Info hinzufügen
         if i < len(rom_info_global) and rom_info_global[i]:
             rom_family.append(rom_info_global[i].get("family", "--"))
             rom_serial.append(rom_info_global[i].get("serial", "--"))
@@ -455,7 +455,7 @@ def handle_client(conn, addr):
             pass
 
 def start_webserver(roms, cfg, save_cb, get_temps, rom_info=None):
-    """Startet Webserver - VERSION 1.4"""
+    """Startet Webserver - VERSION 1.5"""
     global cfg_global, get_temps_global, save_cb_global, rom_info_global
     import machine
     
